@@ -1,0 +1,30 @@
+runtime: python311
+
+env_variables:
+  FLASK_ENV: production
+  ENVIRONMENT: production
+
+automatic_scaling:
+  min_instances: 1
+  max_instances: 2
+
+health_check:
+  enable_health_check: true
+  check_interval_sec: 30
+  timeout_sec: 4
+  unhealthy_threshold: 3
+  healthy_threshold: 2
+
+liveness_check:
+  path: "/health"
+  check_interval_sec: 30
+  timeout_sec: 4
+  failure_threshold: 3
+  success_threshold: 1
+
+readiness_check:
+  path: "/ready"
+  check_interval_sec: 5
+  timeout_sec: 4
+  failure_threshold: 3
+  success_threshold: 1

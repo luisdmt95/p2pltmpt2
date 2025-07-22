@@ -1,0 +1,746 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Binance P2P Arbitrage Bot</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --primary-color: #f7931a;
+            --secondary-color: #1e1e1e;
+            --success-color: #00d4aa;
+            --danger-color: #f6465d;
+            --warning-color: #fcd535;
+        }
+        
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            min-height: 100vh;
+        }
+        
+        .main-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .card {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        .header-card {
+            background: linear-gradient(135deg, var(--primary-color) 0%, #ff6b35 100%);
+            color: white;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        
+        .status-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 8px;
+        }
+        
+        .status-running { background-color: var(--success-color); }
+        .status-stopped { background-color: var(--danger-color); }
+        
+        .price-display {
+            font-size: 2.5rem;
+            font-weight: bold;
+            color: var(--primary-color);
+        }
+        
+        .profit-margin {
+            font-size: 1.2rem;
+            font-weight: 600;
+        }
+        
+        .profit-positive { color: var(--success-color); }
+        .profit-negative { color: var(--danger-color); }
+        
+        .log-container {
+            max-height: 300px;
+            overflow-y: auto;
+            background: #1e1e1e;
+            border-radius: 8px;
+            padding: 15px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9rem;
+        }
+        
+        .log-entry {
+            margin-bottom: 5px;
+            white-space: nowrap;
+        }
+        
+        .log-timestamp { color: #888; }
+        .log-info { color: #4a90e2; }
+        .log-success { color: var(--success-color); }
+        .log-warning { color: var(--warning-color); }
+        .log-error { color: var(--danger-color); }
+        
+        .market-offer {
+            background: rgba(0, 0, 0, 0.05);
+            border-radius: 8px;
+            padding: 10px;
+            margin-bottom: 8px;
+            border-left: 4px solid var(--primary-color);
+        }
+        
+        .btn-custom {
+            border-radius: 25px;
+            padding: 10px 30px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+        
+        .btn-primary-custom {
+            background: linear-gradient(135deg, var(--primary-color) 0%, #ff6b35 100%);
+            border: none;
+            color: white;
+        }
+        
+        .btn-success-custom {
+            background: linear-gradient(135deg, var(--success-color) 0%, #00a896 100%);
+            border: none;
+            color: white;
+        }
+        
+        .btn-danger-custom {
+            background: linear-gradient(135deg, var(--danger-color) 0%, #e53e3e 100%);
+            border: none;
+            color: white;
+        }
+        
+        .form-control {
+            border-radius: 10px;
+            border: 2px solid rgba(0, 0, 0, 0.1);
+            transition: all 0.3s ease;
+        }
+        
+        .form-control:focus {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 0.2rem rgba(247, 147, 26, 0.25);
+        }
+        
+        .setup-modal .modal-content {
+            border-radius: 15px;
+        }
+        
+        .fade-in {
+            animation: fadeIn 0.5s ease-in;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .loading-spinner {
+            display: none;
+            width: 20px;
+            height: 20px;
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid var(--primary-color);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 8px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="main-container">
+        <!-- Header -->
+        <div class="card header-card">
+            <div class="card-body py-4">
+                <h1 class="mb-0"><i class="fas fa-chart-line me-3"></i>Binance P2P Arbitrage Bot</h1>
+                <p class="mb-0 mt-2">Monitor y actualización automática de precios VES/USDT</p>
+            </div>
+        </div>
+
+        <!-- Status and Controls -->
+        <div class="row mb-4">
+            <div class="col-md-8">
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title">Estado del Bot</h5>
+                        <div class="d-flex align-items-center mb-3">
+                            <span class="status-indicator" id="statusIndicator"></span>
+                            <strong id="botStatus">Detenido</strong>
+                        </div>
+                        <div class="btn-group me-3" role="group">
+                            <button id="startBtn" class="btn btn-success-custom btn-custom">
+                                <i class="fas fa-play me-2"></i>Iniciar
+                            </button>
+                            <button id="stopBtn" class="btn btn-danger-custom btn-custom" disabled>
+                                <i class="fas fa-stop me-2"></i>Detener
+                            </button>
+                        </div>
+                        <button id="setupBtn" class="btn btn-primary-custom btn-custom">
+                            <i class="fas fa-cog me-2"></i>Configurar
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-body text-center">
+                        <h5 class="card-title">Tu Precio de Compra</h5>
+                        <div class="price-display" id="currentPrice">--</div>
+                        <div class="profit-margin" id="profitMargin">-- %</div>
+                        <small class="text-muted" id="lastUpdate">Sin datos</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Market Data and Logs -->
+        <div class="row">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h5 class="card-title mb-0">Vendedores USDT - Pago Móvil</h5>
+                            <button id="refreshMarketBtn" class="btn btn-outline-primary btn-sm">
+                                <div class="loading-spinner" id="marketSpinner"></div>
+                                <i class="fas fa-sync-alt"></i> Actualizar
+                            </button>
+                        </div>
+                        <small class="text-muted mb-3 d-block">
+                            <i class="fas fa-info-circle me-1"></i>
+                            Comerciantes verificados que aceptan Pago Móvil con filtro ≤<span id="currentAmountFilter">1000</span> VES. Búsqueda ampliada: 300+ anuncios filtrados.
+                        </small>
+                        <div id="marketData">
+                            <p class="text-muted">Haz clic en actualizar para ver datos del mercado</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h5 class="card-title mb-0">Registro de Actividad</h5>
+                            <button id="clearLogsBtn" class="btn btn-outline-secondary btn-sm">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                        <div class="log-container" id="logContainer">
+                            <div class="log-entry">
+                                <span class="log-timestamp">[--:--:--]</span>
+                                <span class="log-info">Sistema iniciado</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Price Calculation Section -->
+        <div class="row mt-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title">Cálculo de Tu Precio de Compra</h5>
+                        <p class="text-muted mb-3">El bot analiza vendedores con Pago Móvil para calcular precios de compra competitivos</p>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <button id="calculateBtn" class="btn btn-primary-custom btn-custom me-3">
+                                    <div class="loading-spinner" id="calculateSpinner"></div>
+                                    <i class="fas fa-calculator me-2"></i>Calcular Precio
+                                </button>
+                                <button id="updatePriceBtn" class="btn btn-warning btn-custom" disabled>
+                                    <i class="fas fa-upload me-2"></i>Actualizar Anuncio
+                                </button>
+                            </div>
+                            <div class="col-md-6">
+                                <div id="calculationResults"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Setup Modal -->
+    <div class="modal fade setup-modal" id="setupModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Configuración del Bot</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="setupForm">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <h6 class="mb-3">Credenciales API</h6>
+                                <div class="mb-3">
+                                    <label class="form-label">API Key</label>
+                                    <input type="text" class="form-control" id="apiKey" placeholder="Tu Binance API Key">
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">API Secret</label>
+                                    <input type="password" class="form-control" id="apiSecret" placeholder="Tu Binance API Secret">
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">ID del Anuncio P2P</label>
+                                    <input type="text" class="form-control" id="adId" placeholder="ID de tu anuncio de compra">
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <h6 class="mb-3">Configuración de Trading</h6>
+                                <div class="mb-3">
+                                    <label class="form-label">Precio de Referencia (VES)</label>
+                                    <input type="number" class="form-control" id="referencePrice" step="0.01" placeholder="56.50">
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">Margen Mínimo (%)</label>
+                                    <input type="number" class="form-control" id="minMargin" step="0.01" placeholder="-1.0">
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">Margen Máximo (%)</label>
+                                    <input type="number" class="form-control" id="maxMargin" step="0.01" placeholder="-0.3">
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">Desfasaje Preferido (%)</label>
+                                    <input type="number" class="form-control" id="preferredOffset" step="0.01" placeholder="-0.5">
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">Filtro por Monto Mínimo (VES)</label>
+                                    <input type="number" class="form-control" id="minAmountFilter" step="1" value="1000" placeholder="1000">
+                                    <small class="form-text text-muted">Solo considerar anuncios con monto mínimo menor o igual a este valor</small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label class="form-label">Intervalo de Actualización (segundos)</label>
+                                    <input type="number" class="form-control" id="updateInterval" value="5" min="1">
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label class="form-label">Modo de Operación</label>
+                                    <select class="form-control" id="operationMode">
+                                        <option value="manual">Manual (solo sugerencias)</option>
+                                        <option value="auto">Automático (actualiza precios)</option>
+                                        <option value="demo" selected>Demo (sin API calls)</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-primary-custom btn-custom" id="saveConfigBtn">
+                        <div class="loading-spinner" id="saveSpinner"></div>
+                        Guardar Configuración
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    
+    <script>
+        class BinanceBot {
+            constructor() {
+                this.isRunning = false;
+                this.setupEventListeners();
+                this.updateStatus();
+                this.loadLogs();
+                this.setupAutoRefresh();
+            }
+
+            setupEventListeners() {
+                $('#setupBtn').click(() => this.showSetupModal());
+                $('#saveConfigBtn').click(() => this.saveConfiguration());
+                $('#startBtn').click(() => this.startBot());
+                $('#stopBtn').click(() => this.stopBot());
+                $('#calculateBtn').click(() => this.calculatePrice());
+                $('#updatePriceBtn').click(() => this.updatePrice());
+                $('#refreshMarketBtn').click(() => this.refreshMarketData());
+                $('#clearLogsBtn').click(() => this.clearLogs());
+            }
+
+            showSetupModal() {
+                new bootstrap.Modal(document.getElementById('setupModal')).show();
+            }
+
+            async saveConfiguration() {
+                const spinner = $('#saveSpinner');
+                const btn = $('#saveConfigBtn');
+                
+                spinner.show();
+                btn.prop('disabled', true);
+                
+                try {
+                    const config = {
+                        api_key: $('#apiKey').val(),
+                        api_secret: $('#apiSecret').val(),
+                        ad_id: $('#adId').val(),
+                        reference_price: $('#referencePrice').val(),
+                        min_profit_margin: $('#minMargin').val(),
+                        max_profit_margin: $('#maxMargin').val(),
+                        preferred_offset: $('#preferredOffset').val(),
+                        min_amount_filter: $('#minAmountFilter').val(),
+                        update_interval: $('#updateInterval').val(),
+                        auto_mode: $('#operationMode').val() === 'auto',
+                        demo_mode: $('#operationMode').val() === 'demo'
+                    };
+
+                    const response = await fetch('/api/setup', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify(config)
+                    });
+                    
+                    const result = await response.json();
+                    
+                    if (result.success) {
+                        bootstrap.Modal.getInstance(document.getElementById('setupModal')).hide();
+                        this.showAlert('success', 'Configuración guardada exitosamente');
+                    } else {
+                        this.showAlert('danger', result.message);
+                    }
+                } catch (error) {
+                    this.showAlert('danger', 'Error al guardar configuración: ' + error.message);
+                } finally {
+                    spinner.hide();
+                    btn.prop('disabled', false);
+                }
+            }
+
+            async startBot() {
+                try {
+                    const response = await fetch('/api/start', {method: 'POST'});
+                    const result = await response.json();
+                    
+                    if (result.success) {
+                        this.isRunning = true;
+                        this.updateButtonStates();
+                        this.showAlert('success', 'Bot iniciado exitosamente');
+                    } else {
+                        this.showAlert('danger', result.message);
+                    }
+                } catch (error) {
+                    this.showAlert('danger', 'Error al iniciar bot: ' + error.message);
+                }
+            }
+
+            async stopBot() {
+                try {
+                    const response = await fetch('/api/stop', {method: 'POST'});
+                    const result = await response.json();
+                    
+                    if (result.success) {
+                        this.isRunning = false;
+                        this.updateButtonStates();
+                        this.showAlert('info', 'Bot detenido');
+                    } else {
+                        this.showAlert('danger', result.message);
+                    }
+                } catch (error) {
+                    this.showAlert('danger', 'Error al detener bot: ' + error.message);
+                }
+            }
+
+            async calculatePrice() {
+                const spinner = $('#calculateSpinner');
+                const btn = $('#calculateBtn');
+                
+                spinner.show();
+                btn.prop('disabled', true);
+                
+                try {
+                    const response = await fetch('/api/calculate-price', {method: 'POST'});
+                    const result = await response.json();
+                    
+                    if (result.success) {
+                        this.updatePriceDisplay(result.price_data);
+                        $('#updatePriceBtn').prop('disabled', false);
+                        this.showAlert('success', 'Precio calculado exitosamente');
+                    } else {
+                        this.showAlert('warning', result.message);
+                    }
+                } catch (error) {
+                    this.showAlert('danger', 'Error al calcular precio: ' + error.message);
+                } finally {
+                    spinner.hide();
+                    btn.prop('disabled', false);
+                }
+            }
+
+            async updatePrice() {
+                try {
+                    const response = await fetch('/api/update-price', {method: 'POST'});
+                    const result = await response.json();
+                    
+                    if (result.success) {
+                        this.showAlert('success', result.message);
+                    } else {
+                        if (result.geo_restricted) {
+                            this.showGeoRestrictedAlert(result.message);
+                        } else {
+                            this.showAlert('danger', result.message);
+                        }
+                    }
+                } catch (error) {
+                    this.showAlert('danger', 'Error al actualizar precio: ' + error.message);
+                }
+            }
+
+            showGeoRestrictedAlert(message) {
+                const alertHtml = `
+                    <div class="alert alert-warning alert-dismissible fade show" role="alert">
+                        <h5><i class="fas fa-exclamation-triangle"></i> Restricciones Geográficas</h5>
+                        <p><strong>Las actualizaciones automáticas no están disponibles en tu ubicación.</strong></p>
+                        <div class="row mt-3">
+                            <div class="col-md-6">
+                                <h6>✅ Lo que SÍ funciona:</h6>
+                                <ul class="list-unstyled">
+                                    <li>📊 Análisis de mercado</li>
+                                    <li>💰 Cálculo de precios óptimos</li>
+                                    <li>📈 Monitoreo en tiempo real</li>
+                                </ul>
+                            </div>
+                            <div class="col-md-6">
+                                <h6>⚠️ Actualización manual requerida:</h6>
+                                <p class="mb-2">${message}</p>
+                                <button class="btn btn-outline-primary btn-sm" onclick="bot.enableDemoMode()">
+                                    🔄 Activar Modo Demo
+                                </button>
+                            </div>
+                        </div>
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                `;
+                
+                $('#alerts').html(alertHtml);
+            }
+
+            async enableDemoMode() {
+                try {
+                    // Simulate enabling demo mode by updating config
+                    const currentConfig = await this.getCurrentConfig();
+                    currentConfig.demo_mode = true;
+                    
+                    await this.saveConfig(currentConfig);
+                    this.showAlert('info', '🔄 Modo Demo activado. El bot continuará analizando y calculando precios sin intentar actualizaciones automáticas.');
+                } catch (error) {
+                    this.showAlert('danger', 'Error al activar Modo Demo: ' + error.message);
+                }
+            }
+
+            async getCurrentConfig() {
+                const response = await fetch('/api/status');
+                const result = await response.json();
+                return result.config || {};
+            }
+
+            async analyzeLowAmounts() {
+                const spinner = $('#analyzeSpinner');
+                const btn = $('#analyzeLowAmountsBtn');
+                
+                spinner.show();
+                btn.prop('disabled', true);
+                
+                try {
+                    const response = await fetch('/api/analyze-low-amounts', {method: 'POST'});
+                    const result = await response.json();
+                    
+                    if (result.success) {
+                        this.showAlert('success', result.message);
+                        // Refresh market data with new filter
+                        setTimeout(() => this.refreshMarketData(), 1000);
+                    } else {
+                        this.showAlert('warning', result.message);
+                        // Show analysis details
+                        if (result.analysis) {
+                            let analysisHtml = '<h6>Análisis por Monto:</h6><ul>';
+                            for (const [amount, data] of Object.entries(result.analysis)) {
+                                analysisHtml += `<li>${amount} VES: ${data.count} comerciantes verificados</li>`;
+                            }
+                            analysisHtml += '</ul><p>💡 Considera subir el filtro de monto mínimo para encontrar más comerciantes verificados.</p>';
+                            this.showAlert('info', analysisHtml);
+                        }
+                    }
+                } catch (error) {
+                    this.showAlert('danger', 'Error al analizar montos bajos: ' + error.message);
+                } finally {
+                    spinner.hide();
+                    btn.prop('disabled', false);
+                }
+            }
+
+            async refreshMarketData() {
+                const spinner = $('#marketSpinner');
+                const btn = $('#refreshMarketBtn');
+                
+                spinner.show();
+                btn.prop('disabled', true);
+                
+                try {
+                    const response = await fetch('/api/market-data');
+                    const result = await response.json();
+                    
+                    this.displayMarketData(result.market_data);
+                } catch (error) {
+                    this.showAlert('danger', 'Error al actualizar datos del mercado: ' + error.message);
+                } finally {
+                    spinner.hide();
+                    btn.prop('disabled', false);
+                }
+            }
+
+            displayMarketData(data) {
+                const container = $('#marketData');
+                
+                if (!data || data.length === 0) {
+                    container.html('<p class="text-muted">No hay datos del mercado disponibles</p>');
+                    return;
+                }
+                
+                let html = '';
+                data.slice(0, 5).forEach((offer, index) => {
+                    html += `
+                        <div class="market-offer">
+                            <div class="d-flex justify-content-between">
+                                <strong>#${index + 1} ${offer.price.toFixed(2)} VES</strong>
+                                <span class="text-muted">${offer.merchant}</span>
+                            </div>
+                            <small class="text-muted">
+                                Disponible: ${offer.available.toFixed(2)} USDT
+                                (${offer.min_amount.toFixed(0)} - ${offer.max_amount.toFixed(0)} VES)
+                            </small>
+                        </div>
+                    `;
+                });
+                
+                container.html(html);
+            }
+
+            updatePriceDisplay(priceData) {
+                if (!priceData) return;
+                
+                $('#currentPrice').text(priceData.optimal_price.toFixed(2) + ' VES');
+                
+                const margin = priceData.profit_margin;
+                const marginElement = $('#profitMargin');
+                marginElement.text(margin.toFixed(2) + '%');
+                marginElement.removeClass('profit-positive profit-negative');
+                marginElement.addClass(margin >= 0 ? 'profit-positive' : 'profit-negative');
+                
+                const updateTime = new Date(priceData.timestamp).toLocaleTimeString();
+                $('#lastUpdate').text('Actualizado: ' + updateTime);
+                
+                this.displayMarketData(priceData.market_data);
+            }
+
+            async updateStatus() {
+                try {
+                    const response = await fetch('/api/status');
+                    const result = await response.json();
+                    
+                    this.isRunning = result.running;
+                    $('#botStatus').text(result.status);
+                    
+                    const indicator = $('#statusIndicator');
+                    indicator.removeClass('status-running status-stopped');
+                    indicator.addClass(result.running ? 'status-running' : 'status-stopped');
+                    
+                    this.updateButtonStates();
+                    
+                    if (result.last_price_data && Object.keys(result.last_price_data).length > 0) {
+                        this.updatePriceDisplay(result.last_price_data);
+                    }
+                } catch (error) {
+                    console.error('Error updating status:', error);
+                }
+            }
+
+            updateButtonStates() {
+                $('#startBtn').prop('disabled', this.isRunning);
+                $('#stopBtn').prop('disabled', !this.isRunning);
+            }
+
+            async loadLogs() {
+                try {
+                    const response = await fetch('/api/logs');
+                    const result = await response.json();
+                    
+                    const container = $('#logContainer');
+                    let html = '';
+                    
+                    result.logs.forEach(log => {
+                        html += `
+                            <div class="log-entry">
+                                <span class="log-timestamp">[${log.timestamp}]</span>
+                                <span class="log-${log.level.toLowerCase()}">${log.level}: ${log.message}</span>
+                            </div>
+                        `;
+                    });
+                    
+                    container.html(html);
+                    container.scrollTop(container[0].scrollHeight);
+                } catch (error) {
+                    console.error('Error loading logs:', error);
+                }
+            }
+
+            clearLogs() {
+                $('#logContainer').html('<div class="log-entry"><span class="log-timestamp">[--:--:--]</span><span class="log-info">Logs cleared</span></div>');
+            }
+
+            setupAutoRefresh() {
+                setInterval(() => {
+                    this.updateStatus();
+                    this.loadLogs();
+                }, 3000);
+            }
+
+            showAlert(type, message) {
+                const alertHtml = `
+                    <div class="alert alert-${type} alert-dismissible fade show position-fixed" 
+                         style="top: 20px; right: 20px; z-index: 9999; min-width: 300px;">
+                        ${message}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                `;
+                
+                $('body').append(alertHtml);
+                
+                setTimeout(() => {
+                    $('.alert').fadeOut(() => $('.alert').remove());
+                }, 5000);
+            }
+        }
+
+        // Initialize the bot interface when document is ready
+        $(document).ready(() => {
+            new BinanceBot();
+        });
+    </script>
+</body>
+</html>
